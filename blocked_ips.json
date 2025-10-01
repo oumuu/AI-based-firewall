@@ -1,0 +1,14 @@
+{
+    "192.168.204.137": {
+        "timestamp": "2025-03-09T05:01:15.451179",
+        "reason": "DoS Attack"
+    },
+    "192.168.204.138": {
+        "timestamp": "2025-05-14T16:08:15.916579",
+        "reason": "Multiples infractions pendant la quarantaine (75) (apr\u00e8s quarantaine)"
+    },
+    "192.168.204.139": {
+        "timestamp": "2025-05-31T23:13:09.871273",
+        "reason": "HTTP Flood"
+    }
+}
