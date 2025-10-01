@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pare-feu IA - Interface de Gestion</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Awesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        danger: '#EF4444',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        info: '#3B82F6',
+                    }
+                }
+            }
+        }
+
+        // Dark mode detection
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+    <style>
+        /* Styles personnalisés */
+        .code-block {
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .code-block::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .code-block::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.7);
+            border-radius: 4px;
+        }
+        .dark .code-block::-webkit-scrollbar-thumb {
+            background-color: rgba(75, 85, 99, 0.7);
+        }
+        .code-block::-webkit-scrollbar-track {
+            background-color: rgba(229, 231, 235, 0.5);
+            border-radius: 4px;
+        }
+        .dark .code-block::-webkit-scrollbar-track {
+            background-color: rgba(31, 41, 55, 0.5);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block !important;
+        }
+        /* Animation pour les alertes de sécurité */
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .alert-pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        <!-- En-tête -->
+        <header class="mb-6">
+            <div class="flex justify-between items-center">
+                <h1 class="text-3xl font-bold text-primary">Pare-feu IA - Tableau de Bord</h1>
+                <div>
+                    <span id="serviceStatus" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-200 dark:bg-gray-700">
+                        Chargement...
+                    </span>
+                </div>
+            </div>
+            <p class="text-gray-600 dark:text-gray-400">Système de détection d'intrusion basé sur l'apprentissage automatique avec CICIDS2017</p>
+        </header>
+
+        <!-- Notification de connexion -->
+        <div id="apiConnectionError" class="hidden mb-6 p-4 bg-red-100 dark:bg-red-900 dark:bg-opacity-20 text-red-800 dark:text-red-200 rounded-lg">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-red-500 mt-0.5"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium">Erreur de connexion à l'API</h3>
+                    <div class="mt-1 text-sm">
+                        <p>Impossible de se connecter à l'API du pare-feu. Veuillez vérifier que le service API est en cours d'exécution.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglets principaux -->
+        <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
+            <nav class="flex flex-wrap -mb-px">
+                <button id="dashboard-tab" class="tab-btn text-primary border-primary px-4 py-2 font-medium text-sm border-b-2" onclick="switchTab('dashboard')">
+                    <i class="fas fa-chart-line mr-1"></i> Tableau de Bord
+                </button>
+                <button id="config-tab" class="tab-btn text-gray-500 hover:text-primary dark:text-gray-400 px-4 py-2 font-medium text-sm border-b border-transparent hover:border-primary" onclick="switchTab('config')">
+                    <i class="fas fa-cog mr-1"></i> Configuration
+                </button>
+                <button id="events-tab" class="tab-btn text-gray-500 hover:text-primary dark:text-gray-400 px-4 py-2 font-medium text-sm border-b border-transparent hover:border-primary" onclick="switchTab('events')">
+                    <i class="fas fa-shield-alt mr-1"></i> Événements
+                </button>
+                <button id="logs-tab" class="tab-btn text-gray-500 hover:text-primary dark:text-gray-400 px-4 py-2 font-medium text-sm border-b border-transparent hover:border-primary" onclick="switchTab('logs')">
+                    <i class="fas fa-file-alt mr-1"></i> Logs
+                </button>
+            </nav>
+        </div>
+
+        <!-- Contenu des onglets -->
+        <!-- 1. Tableau de bord -->
+        <div id="dashboard" class="tab-content active">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Statut du système -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-2">État du Système</h3>
+                    <div id="system-status" class="space-y-2">
+                        <div class="flex items-center mb-2">
+                            <div class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600 mr-2" id="fw-status-light"></div>
+                            <span id="fw-status-text">Chargement...</span>
+                        </div>
+                        <div class="flex items-center mb-2">
+                            <div class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600 mr-2" id="model-status-light"></div>
+                            <span id="model-status-text">Chargement...</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600 mr-2" id="rt-status-light"></div>
+                            <span id="rt-status-text">Chargement...</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <p class="text-sm text-gray-600 dark:text-gray-400" id="uptime-text">Temps d'exécution: -</p>
+                    </div>
+                </div>
+                
+                <!-- Statistiques -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-2">Statistiques</h3>
+                    <div class="text-3xl font-bold mb-2" id="packets-analyzed">-</div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400 mb-4">Paquets analysés</div>
+                    <div class="flex justify-between text-sm">
+                        <div>
+                            <div class="text-danger font-bold" id="attacks-detected">-</div>
+                            <div class="text-gray-600 dark:text-gray-400">Menaces détectées</div>
+                        </div>
+                        <div>
+                            <div class="text-warning font-bold" id="ips-blocked">-</div>
+                            <div class="text-gray-600 dark:text-gray-400">IPs bloquées</div>
+                        </div>
+                        <div>
+                            <div class="text-success font-bold" id="packets-per-second">-</div>
+                            <div class="text-gray-600 dark:text-gray-400">Paquets/sec</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Mode de fonctionnement -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-2">Mode de Fonctionnement</h3>
+                    <div class="text-xl font-bold mb-4" id="operation-mode">-</div>
+                    <div class="mb-1 flex justify-between">
+                        <span class="text-sm">Seuil de confiance</span>
+                        <span class="text-sm font-medium" id="confidence-threshold">-</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
+                        <div id="confidence-bar" class="bg-primary h-2 rounded-full" style="width: 80%"></div>
+                    </div>
+                    
+                    <div class="mb-2 text-sm font-medium">Interfaces surveillées</div>
+                    <div id="monitored-interfaces" class="text-sm text-gray-600 dark:text-gray-400">
+                        Chargement...
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Graphique des types d'attaque -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-4">Détection par Type d'Attaque</h3>
+                    <div class="h-64">
+                        <canvas id="attackTypesChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Graphique temporel -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-4">Activité Récente</h3>
+                    <div class="h-64">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Activité récente -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700 mb-8">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg">Alertes Récentes</h3>
+                    <button id="clearAlertsBtn" class="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded">
+                        <i class="fas fa-trash-alt mr-1"></i> Effacer
+                    </button>
+                </div>
+                <div id="alertsContainer" class="space-y-3 max-h-64 overflow-y-auto">
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-6">
+                        Chargement des alertes...
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Boutons d'action -->
+            <div class="flex flex-wrap gap-4 justify-center">
+                <button id="startBtn" class="px-4 py-2 bg-primary hover:bg-opacity-90 text-white rounded-lg font-medium flex items-center">
+                    <i class="fas fa-play mr-2"></i> Démarrer Service
+                </button>
+                <button id="stopBtn" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium flex items-center">
+                    <i class="fas fa-stop mr-2"></i> Arrêter Service
+                </button>
+                <button id="refreshBtn" class="px-4 py-2 bg-info hover:bg-opacity-90 text-white rounded-lg font-medium flex items-center">
+                    <i class="fas fa-sync-alt mr-2"></i> Actualiser
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. Configuration -->
+        <div id="config" class="tab-content">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700 mb-6">
+                <h3 class="font-bold text-xl mb-4">Configuration du Pare-feu</h3>
+                
+                <form id="configForm" class="space-y-6">
+                    <!-- Mode de fonctionnement -->
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Mode de fonctionnement</label>
+                        <select id="configMode" class="w-full p-2 text-base bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                            <option value="active">Actif (Détection et Blocage)</option>
+                            <option value="passive">Passif (Détection uniquement)</option>
+                            <option value="learning">Apprentissage (Collecte des données)</option>
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            En mode actif, les adresses IP suspectes seront automatiquement bloquées.
+                        </p>
+                    </div>
+                    
+                    <!-- Seuil de confiance -->
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Seuil de Confiance</label>
+                        <div class="flex items-center">
+                            <input type="range" id="configThreshold" min="0" max="100" value="80" class="w-full mr-3">
+                            <span id="thresholdValue">80%</span>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Seuil minimal de confiance pour qu'une détection soit considérée comme une menace.
+                        </p>
+                    </div>
+                    
+                    <!-- Interfaces réseau -->
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Interfaces Réseau à Surveiller</label>
+                        <div id="interfacesContainer" class="flex flex-wrap gap-2 p-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700 mb-2">
+                            <div class="flex items-center">
+                                <span class="text-sm text-gray-500 dark:text-gray-400">Chargement des interfaces...</span>
+                            </div>
+                        </div>
+                        <button type="button" id="detectInterfacesBtn" class="text-xs text-primary">
+                            <i class="fas fa-sync-alt mr-1"></i> Détecter interfaces disponibles
+                        </button>
+                    </div>
+                    
+                    <!-- Intervalle de mise à jour -->
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Intervalle de Mise à Jour</label>
+                        <select id="configInterval" class="w-full p-2 text-base bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                            <option value="5">5 secondes</option>
+                            <option value="10">10 secondes</option>
+                            <option value="30">30 secondes</option>
+                            <option value="60">1 minute</option>
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Fréquence d'analyse et de mise à jour des statistiques.
+                        </p>
+                    </div>
+                    
+                    <!-- Options supplémentaires -->
+                    <!-- Configuration des alertes par email -->
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Alertes par Email</label>
+                        <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded">
+                            <div class="mb-2">
+                                <div class="flex items-center">
+                                    <input type="checkbox" id="configEmailEnabled" class="h-4 w-4 text-primary border-gray-300 rounded">
+                                    <label for="configEmailEnabled" class="ml-2 block text-sm">Activer les alertes par email</label>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                                <div>
+                                    <label class="text-xs">Serveur SMTP</label>
+                                    <input type="text" id="configSmtpServer" placeholder="smtp.gmail.com" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs">Port</label>
+                                    <input type="number" id="configSmtpPort" placeholder="587" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Email Expéditeur</label>
+                                <input type="email" id="configSenderEmail" placeholder="votre-email@gmail.com" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Mot de passe Expéditeur</label>
+                                <input type="password" id="configSenderPassword" placeholder="mot de passe ou clé d'application" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Email Destinataire</label>
+                                <input type="email" id="configRecipientEmail" placeholder="destinataire@example.com" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Temps entre alertes (minutes)</label>
+                                <input type="number" id="configCooldownMinutes" placeholder="5" min="1" max="60" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Pour Gmail, utilisez une clé d'application plutôt que votre mot de passe.
+                                <a href="https://support.google.com/accounts/answer/185833" target="_blank" class="text-primary">En savoir plus</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configuration des alertes par email -->
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Alertes par Email</label>
+                        <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded">
+                            <div class="mb-2">
+                                <div class="flex items-center">
+                                    <input type="checkbox" id="configEmailEnabled" class="h-4 w-4 text-primary border-gray-300 rounded">
+                                    <label for="configEmailEnabled" class="ml-2 block text-sm">Activer les alertes par email</label>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                                <div>
+                                    <label class="text-xs">Serveur SMTP</label>
+                                    <input type="text" id="configSmtpServer" placeholder="smtp.gmail.com" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                                </div>
+                                <div>
+                                    <label class="text-xs">Port</label>
+                                    <input type="number" id="configSmtpPort" placeholder="587" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Email Expéditeur</label>
+                                <input type="email" id="configSenderEmail" placeholder="votre-email@gmail.com" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Mot de passe Expéditeur</label>
+                                <input type="password" id="configSenderPassword" placeholder="mot de passe ou clé d'application" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Email Destinataire</label>
+                                <input type="email" id="configRecipientEmail" placeholder="destinataire@example.com" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2">
+                                <label class="text-xs">Temps entre alertes (minutes)</label>
+                                <input type="number" id="configCooldownMinutes" placeholder="5" min="1" max="60" class="w-full p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Pour Gmail, utilisez une clé d'application plutôt que votre mot de passe.
+                                <a href="https://support.google.com/accounts/answer/185833" target="_blank" class="text-primary">En savoir plus</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="configLogging" class="h-4 w-4 text-primary border-gray-300 rounded">
+                            <label for="configLogging" class="ml-2 block text-sm">Activer la journalisation détaillée</label>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <input type="checkbox" id="configNotifications" class="h-4 w-4 text-primary border-gray-300 rounded">
+                            <label for="configNotifications" class="ml-2 block text-sm">Activer les notifications système</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Bouton de sauvegarde -->
+                    <div class="pt-4">
+                        <button type="submit" class="w-full px-4 py-2 bg-primary hover:bg-opacity-90 text-white rounded-lg font-medium">
+                            <i class="fas fa-save mr-2"></i> Sauvegarder Configuration
+                        </button>
+                        <div id="configStatus" class="mt-3 text-center hidden"></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 3. Événements -->
+        <div id="events" class="tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Résumé des événements -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-4">Résumé des Événements</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="text-3xl font-bold" id="total-events">-</div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">Total des événements</div>
+                        </div>
+                        <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <h4 class="font-medium text-sm mb-2">Distribution par type</h4>
+                            <div id="event-types-list" class="space-y-2 text-sm">
+                                <div class="text-center text-gray-500 dark:text-gray-400">
+                                    Chargement...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filtres d'événements -->
+                <div class="md:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-4">Filtres</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Type d'événement</label>
+                            <select id="eventTypeFilter" class="w-full p-2 text-base bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                                <option value="">Tous les types</option>
+                                <!-- Options ajoutées dynamiquement -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Depuis</label>
+                            <input type="datetime-local" id="eventFromFilter" class="w-full p-2 text-base bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Nombre d'événements</label>
+                            <select id="eventLimitFilter" class="w-full p-2 text-base bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                                <option value="50">50 derniers</option>
+                                <option value="100" selected>100 derniers</option>
+                                <option value="200">200 derniers</option>
+                                <option value="500">500 derniers</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button id="applyFiltersBtn" class="px-4 py-2 bg-primary hover:bg-opacity-90 text-white rounded-lg font-medium">
+                            <i class="fas fa-filter mr-2"></i> Appliquer Filtres
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Liste des événements -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700 mb-6">
+                <h3 class="font-bold text-lg mb-4">Liste des Événements</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-100 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Horodatage</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Type</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">IP Source</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">IP Destination</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Confiance</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventsTableBody" class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    Chargement des événements...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- IPs bloquées -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold text-lg mb-4">Adresses IP Bloquées</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-100 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Adresse IP</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Raison</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Date de blocage</th>
+                                <th class="px-4 py-2 text-left text-sm font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="blockedIpsTableBody" class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr>
+                                <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    Chargement des IPs bloquées...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Logs -->
+        <div id="logs" class="tab-content">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg">Journaux du Système</h3>
+                    <div class="flex gap-2">
+                        <select id="logFileSelect" class="text-sm bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-1">
+                            <option value="ai_firewall">Pare-feu</option>
+                            <option value="api">API</option>
+                        </select>
+                        <button id="refreshLogsBtn" class="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded">
+                            <i class="fas fa-sync-alt mr-1"></i> Actualiser
+                        </button>
+                    </div>
+                </div>
+                <div class="code-block bg-gray-100 dark:bg-gray-800 p-4 rounded-lg border border-gray-300 dark:border-gray-700 text-xs h-96 overflow-y-auto font-mono" id="logsContainer">
+                    Chargement des logs...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pour les messages -->
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full mx-4 overflow-hidden shadow-xl">
+            <div class="px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <h3 id="modalTitle" class="text-lg font-medium"></h3>
+                    <button id="closeModal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="modalContent" class="mt-4">
+                    <!-- Contenu dynamique -->
+                </div>
+            </div>
+            <div class="px-6 py-3 bg-gray-100 dark:bg-gray-700 text-right">
+                <button id="modalConfirm" class="px-4 py-2 bg-primary hover:bg-opacity-90 text-white rounded-lg font-medium mr-2">Confirmer</button>
+                <button id="modalCancel" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded-lg font-medium">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script principal -->
+    <script>
+        // Configuration de l'API
+        const API_URL = window.location.hostname === 'localhost' 
+                        ? 'http://localhost:5000/api' 
+                        : `http://${window.location.hostname}:5000/api`;
+        
+        // Variables globales
+        let attackTypesChart = null;
+        let activityChart = null;
+        let eventTypes = [];
+        let refreshInterval = null;
+        
+        // Gestion des onglets
+        function switchTab(tabId) {
+            // Cacher tous les contenus d'onglet
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Réinitialiser tous les boutons d'onglet
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('text-primary', 'border-primary');
+                btn.classList.add('text-gray-500', 'hover:text-primary', 'dark:text-gray-400', 'border-transparent');
+            });
+            
+            // Activer l'onglet sélectionné
+            document.getElementById(tabId).classList.add('active');
+            document.getElementById(`${tabId}-tab`).classList.add('text-primary', 'border-primary');
+            document.getElementById(`${tabId}-tab`).classList.remove('text-gray-500', 'hover:text-primary', 'dark:text-gray-400', 'border-transparent');
+        }
+        
+        // Fonction pour formater une date
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+        
+        // Fonction pour montrer/cacher le modal
+        function showModal(title, content, onConfirm = null) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalContent').innerHTML = content;
+            document.getElementById('modal').classList.remove('hidden');
+            
+            // Gérer les boutons
+            const confirmBtn = document.getElementById('modalConfirm');
+            const cancelBtn = document.getElementById('modalCancel');
+            const closeBtn = document.getElementById('closeModal');
+            
+            // Réinitialiser les gestionnaires d'événements précédents
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            const newCancelBtn = cancelBtn.cloneNode(true);
+            const newCloseBtn = closeBtn.cloneNode(true);
+            
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+            closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+            
+            // Gestionnaires pour fermer le modal
+            newCancelBtn.addEventListener('click', () => {
+                document.getElementById('modal').classList.add('hidden');
+            });
+            
+            newCloseBtn.addEventListener('click', () => {
+                document.getElementById('modal').classList.add('hidden');
+            });
+            
+            // Gestionnaire pour le bouton confirmer
+            if (onConfirm) {
+                newConfirmBtn.addEventListener('click', () => {
+                    onConfirm();
+                    document.getElementById('modal').classList.add('hidden');
+                });
+            } else {
+                newConfirmBtn.style.display = 'none';
+            }
+        }
+        
+        // Fonction pour masquer le modal
+        function hideModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+        
+        // Fonction pour montrer une notification
+        function showNotification(type, message, duration = 3000) {
+            // Créer un élément de notification
+            const notification = document.createElement('div');
+            notification.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 
+                type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+            } text-white`;
+            notification.innerHTML = message;
+            
+            // Ajouter au DOM
+            document.body.appendChild(notification);
+            
+            // Supprimer après un délai
+            setTimeout(() => {
+                notification.remove();
+            }, duration);
+        }
+        
+        // Fonction pour formater les nombres
+        function formatNumber(number) {
+            return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+        }
+        
+        // Fonction pour vérifier la connexion à l'API
+        async function checkApiConnection() {
+            try {
+                const response = await fetch(`${API_URL}/status`);
+                if (response.ok) {
+                    document.getElementById('apiConnectionError').classList.add('hidden');
+                    return true;
+                } else {
+                    throw new Error('API non disponible');
+                }
+            } catch (error) {
+                console.error('Erreur de connexion à l\'API:', error);
+                document.getElementById('apiConnectionError').classList.remove('hidden');
+                return false;
+            }
+        }
+        
+        // Charger le statut du service
+        async function loadServiceStatus() {
+            try {
+                const response = await fetch(`${API_URL}/status`);
+                if (!response.ok) throw new Error('Erreur lors de la récupération du statut');
+                
+                const data = await response.json();
+                const statusElement = document.getElementById('serviceStatus');
+                const startBtn = document.getElementById('startBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                
+                if (data.status === 'running') {
+                    statusElement.textContent = 'Service actif';
+                    statusElement.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:bg-opacity-20 dark:text-green-200';
+                    
+                    startBtn.disabled = true;
+                    startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    stopBtn.disabled = false;
+                    stopBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    
+                    // Mise à jour des indicateurs
+                    document.getElementById('fw-status-light').className = 'w-3 h-3 rounded-full bg-success mr-2';
+                    document.getElementById('fw-status-text').textContent = 'Pare-feu actif';
+                    document.getElementById('model-status-light').className = 'w-3 h-3 rounded-full bg-success mr-2';
+                    document.getElementById('model-status-text').textContent = 'Modèle IA chargé';
+                    document.getElementById('rt-status-light').className = 'w-3 h-3 rounded-full bg-success mr-2';
+                    document.getElementById('rt-status-text').textContent = 'Analyse en temps réel';
+                } else {
+                    statusElement.textContent = 'Service arrêté';
+                    statusElement.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:bg-opacity-20 dark:text-red-200';
+                    
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    stopBtn.disabled = true;
+                    stopBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    
+                    // Mise à jour des indicateurs
+                    document.getElementById('fw-status-light').className = 'w-3 h-3 rounded-full bg-danger mr-2';
+                    document.getElementById('fw-status-text').textContent = 'Pare-feu inactif';
+                    document.getElementById('model-status-light').className = 'w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600 mr-2';
+                    document.getElementById('model-status-text').textContent = 'Modèle IA non chargé';
+                    document.getElementById('rt-status-light').className = 'w-3 h-3 rounded-full bg-danger mr-2';
+                    document.getElementById('rt-status-text').textContent = 'Analyse arrêtée';
+                }
+                
+                return data.status;
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('serviceStatus').textContent = 'Erreur';
+                document.getElementById('serviceStatus').className = 'px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-700';
+                return 'error';
+            }
+        }
+        
+        // Charger la configuration
+        async function loadConfig() {
+            try {
+                const response = await fetch(`${API_URL}/config`);
+                if (!response.ok) throw new Error('Erreur lors de la récupération de la configuration');
+                
+                const config = await response.json();
+                
+                // Mettre à jour l'interface avec la configuration
+                document.getElementById('configMode').value = config.mode || 'active';
+                
+                const thresholdValue = (config.confidence_threshold || 0.8) * 100;
+                document.getElementById('configThreshold').value = thresholdValue;
+                document.getElementById('thresholdValue').textContent = `${thresholdValue}%`;
+                
+                document.getElementById('configInterval').value = config.update_interval || 10;
+                document.getElementById('configLogging').checked = config.enable_logging !== false;
+                document.getElementById('configNotifications').checked = config.enable_notifications !== false;
+                
+                // Mettre à jour l'affichage du mode de fonctionnement dans le tableau de bord
+                const modeElement = document.getElementById('operation-mode');
+                if (config.mode === 'active') {
+                    modeElement.textContent = 'Actif (Détection et Blocage)';
+                    modeElement.className = 'text-xl font-bold mb-4 text-success';
+                } else if (config.mode === 'passive') {
+                    modeElement.textContent = 'Passif (Détection uniquement)';
+                    modeElement.className = 'text-xl font-bold mb-4 text-warning';
+                } else if (config.mode === 'learning') {
+                    modeElement.textContent = 'Apprentissage (Collecte)';
+                    modeElement.className = 'text-xl font-bold mb-4 text-info';
+                }
+                
+                // Mettre à jour le seuil de confiance affiché
+                document.getElementById('confidence-threshold').textContent = `${thresholdValue}%`;
+                document.getElementById('confidence-bar').style.width = `${thresholdValue}%`;
+                
+                // Mettre à jour les interfaces surveillées
+                if (config.interfaces && config.interfaces.length > 0) {
+                    document.getElementById('monitored-interfaces').textContent = config.interfaces.join(', ');
+                } else {
+                    document.getElementById('monitored-interfaces').textContent = 'Aucune interface configurée';
+                }
+                
+                return config;
+            } catch (error) {
+                console.error('Erreur:', error);
+                return null;
+            }
+        }
+        
+        // Charger les statistiques
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_URL}/stats`);
+                if (!response.ok) throw new Error('Erreur lors de la récupération des statistiques');
+                
+                const stats = await response.json();
+                
+                // Mettre à jour l'interface avec les statistiques
+                document.getElementById('packets-analyzed').textContent = formatNumber(stats.packets_analyzed || 0);
+                document.getElementById('attacks-detected').textContent = formatNumber(stats.attacks_detected || 0);
+                document.getElementById('ips-blocked').textContent = formatNumber(stats.blocked_ips_count || 0);
+                
+                // Calculer les paquets par seconde
+                if (stats.uptime_seconds && stats.uptime_seconds > 0) {
+                    const pps = (stats.packets_analyzed / stats.uptime_seconds).toFixed(1);
+                    document.getElementById('packets-per-second').textContent = pps;
+                    
+                    // Formater le temps d'exécution
+                    const uptime = formatUptime(stats.uptime_seconds);
+                    document.getElementById('uptime-text').textContent = `Temps d'exécution: ${uptime}`;
+                } else {
+                    document.getElementById('packets-per-second').textContent = '-';
+                    document.getElementById('uptime-text').textContent = 'Temps d exécution: -';
+                }
+                
+                // Mettre à jour le graphique des types d'attaque
+                if (stats.attacks_by_type && Object.keys(stats.attacks_by_type).length > 0) {
+                    updateAttackTypesChart(stats.attacks_by_type);
+                }
+                
+                return stats;
+            } catch (error) {
+                console.error('Erreur:', error);
+                return null;
+            }
+        }
+        
+        // Formater le temps d'exécution
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            
+            let result = '';
+            if (days > 0) result += `${days}j `;
+            if (hours > 0 || days > 0) result += `${hours}h `;
+            if (minutes > 0 || hours > 0 || days > 0) result += `${minutes}m `;
+            result += `${remainingSeconds}s`;
+            
+            return result;
+        }
+        
+        // Initialiser les graphiques
+        function initCharts() {
+            // Graphique des types d'attaque
+            const attackTypesCtx = document.getElementById('attackTypesChart').getContext('2d');
+            attackTypesChart = new Chart(attackTypesCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Aucune donnée'],
+                    datasets: [{
+                        data: [1],
+                        backgroundColor: ['#d1d5db'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                color: document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#1F2937'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Graphique d'activité
+            const activityCtx = document.getElementById('activityChart').getContext('2d');
+            activityChart = new Chart(activityCtx, {
+                type: 'line',
+                data: {
+                    labels: [''],
+                    datasets: [
+                        {
+                            label: 'Événements',
+                            data: [0],
+                            borderColor: '#5D5CDE',
+                            backgroundColor: 'rgba(93, 92, 222, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: document.documentElement.classList.contains('dark') ? '#E5E7EB' : '#1F2937'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: document.documentElement.classList.contains('dark') ? '#9CA3AF' : '#4B5563'
+                            },
+                            grid: {
+                                color: document.documentElement.classList.contains('dark') ? 'rgba(75, 85, 99, 0.2)' : 'rgba(156, 163, 175, 0.2)'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                color: document.documentElement.classList.contains('dark') ? '#9CA3AF' : '#4B5563'
+                            },
+                            grid: {
+                                color: document.documentElement.classList.contains('dark') ? 'rgba(75, 85, 99, 0.2)' : 'rgba(156, 163, 175, 0.2)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Mettre à jour le graphique des types d'attaque
+        function updateAttackTypesChart(attacksData) {
+            if (!attackTypesChart) return;
+            
+            const labels = Object.keys(attacksData);
+            const data = Object.values(attacksData);
+            
+            // Couleurs pour les différents types d'attaque
+            const colors = [
+                '#EF4444', // rouge (danger)
+                '#F59E0B', // orange (warning)
+                '#8B5CF6', // violet
+                '#EC4899', // rose
+                '#10B981', // vert
+                '#3B82F6', // bleu
+                '#6366F1'  // indigo
+            ];
+            
+            // S'assurer qu'il y a assez de couleurs
+            const backgroundColors = labels.map((_, index) => colors[index % colors.length]);
+            
+            attackTypesChart.data.labels = labels;
+            attackTypesChart.data.datasets[0].data = data;
+            attackTypesChart.data.datasets[0].backgroundColor = backgroundColors;
+            attackTypesChart.update();
+        }
+        
+        // Mettre à jour le graphique d'activité avec les événements récents
+        async function updateActivityChart() {
+            try {
+                const response = await fetch(`${API_URL}/events?limit=100`);
+                if (!response.ok) throw new Error('Erreur lors de la récupération des événements');
+                
+                const events = await response.json();
+                
+                if (!events || events.length === 0) {
+                    // Pas d'événements à afficher
+                    return;
+                }
+                
+                // Créer un dictionnaire pour compter les événements par heure
+                const last12Hours = [];
+                const now = new Date();
+                for (let i = 11; i >= 0; i--) {
+                    const hour = new Date(now);
+                    hour.setHours(now.getHours() - i);
+                    hour.setMinutes(0);
+                    hour.setSeconds(0);
+                    hour.setMilliseconds(0);
+                    last12Hours.push({
+                        hour: hour,
+                        count: 0,
+                        label: hour.getHours() + 'h'
+                    });
+                }
+                
+                // Compter les événements par heure
+                events.forEach(event => {
+                    const eventTime = new Date(event.timestamp);
+                    for (let i = 0; i < last12Hours.length; i++) {
+                        const hourStart = last12Hours[i].hour;
+                        const hourEnd = new Date(hourStart);
+                        hourEnd.setHours(hourStart.getHours() + 1);
+                        
+                        if (eventTime >= hourStart && eventTime < hourEnd) {
+                            last12Hours[i].count++;
+                            break;
+                        }
+                    }
+                });
+                
+                // Mettre à jour le graphique
+                activityChart.data.labels = last12Hours.map(h => h.label);
+                activityChart.data.datasets[0].data = last12Hours.map(h => h.count);
+                activityChart.update();
+            } catch (error) {
+                console.error('Erreur:', error);
+            }
+        }
+        
+        // Charger les événements récents
+        async function loadEvents(limit = 100, eventType = null, fromDate = null) {
+            try {
+                let url = `${API_URL}/events?limit=${limit}`;
+                if (eventType) url += `&type=${encodeURIComponent(eventType)}`;
+                if (fromDate) url += `&from=${encodeURIComponent(fromDate)}`;
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Erreur lors de la récupération des événements');
+                
+                const events = await response.json();
+                
+                // Mettre à jour le tableau des événements
+                const tableBody = document.getElementById('eventsTableBody');
+                tableBody.innerHTML = '';
+                
+                if (events.length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                Aucun événement trouvé
+                            </td>
+                        </tr>
+                    `;
+                    return events;
+                }
+                
+                // Collecter les types d'événements uniques pour les filtres
+                const uniqueEventTypes = new Set();
+                
+                // Trier les événements par date (plus récent en premier)
+                events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                events.forEach(event => {
+                    uniqueEventTypes.add(event.event_type);
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800';
+                    
+                    // Formater la date
+                    const eventDate = new Date(event.timestamp);
+                    const formattedDate = eventDate.toLocaleString();
+                    
+                    // Déterminer la classe de couleur pour le type d'événement
+                    let typeClass = 'text-gray-800 dark:text-gray-200';
+                    if (event.event_type.toLowerCase().includes('attack') || 
+                        event.event_type.toLowerCase().includes('intrusion')) {
+                        typeClass = 'text-red-600 dark:text-red-400 font-medium';
+                    } else if (event.event_type.toLowerCase().includes('scan')) {
+                        typeClass = 'text-yellow-600 dark:text-yellow-400 font-medium';
+                    }
+                    
+                    // Ajouter les cellules
+                    tr.innerHTML = `
+                        <td class="px-4 py-2 text-sm">${formattedDate}</td>
+                        <td class="px-4 py-2 text-sm ${typeClass}">${event.event_type}</td>
+                        <td class="px-4 py-2 text-sm">${event.src_ip}</td>
+                        <td class="px-4 py-2 text-sm">${event.dst_ip}</td>
+                        <td class="px-4 py-2 text-sm">${(event.confidence * 100).toFixed(1)}%</td>
+                        <td class="px-4 py-2 text-sm">
+                            <button class="text-primary hover:text-opacity-80 block-ip-btn" data-ip="${event.src_ip}">
+                                <i class="fas fa-ban mr-1"></i> Bloquer
+                            </button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(tr);
+                });
+                
+                // Mettre à jour les alertes récentes sur le tableau de bord
+                updateRecentAlerts(events.slice(0, 5));
+                
+                // Mettre à jour les options du filtre de type d'événement
+                updateEventTypeFilter(Array.from(uniqueEventTypes));
+                
+                // Mettre à jour le résumé des événements
+                document.getElementById('total-events').textContent = formatNumber(events.length);
+                updateEventTypesSummary(events);
+                
+                // Stocker les types d'événements pour réutilisation
+                eventTypes = Array.from(uniqueEventTypes);
+                
+                // Ajouter les gestionnaires d'événements pour les boutons de blocage
+                document.querySelectorAll('.block-ip-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const ip = btn.getAttribute('data-ip');
+                        await blockIp(ip);
+                    });
+                });
+                
+                return events;
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('eventsTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-red-500">
+                            Erreur lors du chargement des événements
+                        </td>
+                    </tr>
+                `;
+                return [];
+            }
+        }
+        
+        // Mettre à jour le résumé des types d'événements
+        function updateEventTypesSummary(events) {
+            const typesCount = {};
+            events.forEach(event => {
+                const type = event.event_type;
+                typesCount[type] = (typesCount[type] || 0) + 1;
+            });
+            
+            const typesList = document.getElementById('event-types-list');
+            typesList.innerHTML = '';
+            
+            Object.entries(typesCount).sort((a, b) => b[1] - a[1]).forEach(([type, count]) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between';
+                div.innerHTML = `
+                    <span>${type}</span>
+                    <span class="font-medium">${count}</span>
+                `;
+                typesList.appendChild(div);
+            });
+        }
+        
+        // Mettre à jour le filtre de type d'événement
+        function updateEventTypeFilter(types) {
+            const select = document.getElementById('eventTypeFilter');
+            
+            // Sauvegarder la valeur actuelle
+            const currentValue = select.value;
+            
+            // Vider et recréer les options
+            select.innerHTML = '<option value="">Tous les types</option>';
+            
+            types.sort().forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                select.appendChild(option);
+            });
+            
+            // Restaurer la valeur si elle existe toujours
+            if (types.includes(currentValue)) {
+                select.value = currentValue;
+            }
+        }
+        
+        // Mettre à jour les alertes récentes sur le tableau de bord
+        function updateRecentAlerts(events) {
+            const alertsContainer = document.getElementById('alertsContainer');
+            alertsContainer.innerHTML = '';
+            
+            if (events.length === 0) {
+                alertsContainer.innerHTML = `
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-6">
+                        Aucune alerte récente
+                    </div>
+                `;
+                return;
+            }
+            
+            events.forEach(event => {
+                const alertTime = new Date(event.timestamp);
+                
+                // Déterminer la classe de couleur selon le type d'événement
+                let alertClass = '';
+                if (event.event_type.toLowerCase().includes('attack') || 
+                    event.event_type.toLowerCase().includes('intrusion')) {
+                    alertClass = 'bg-red-100 dark:bg-red-900 dark:bg-opacity-20 border-red-400 text-red-800 dark:text-red-200 alert-pulse';
+                } else if (event.event_type.toLowerCase().includes('scan')) {
+                    alertClass = 'bg-yellow-100 dark:bg-yellow-900 dark:bg-opacity-20 border-yellow-400 text-yellow-800 dark:text-yellow-200';
+                } else {
+                    alertClass = 'bg-blue-100 dark:bg-blue-900 dark:bg-opacity-20 border-blue-400 text-blue-800 dark:text-blue-200';
+                }
+                
+                const alertHTML = `
+                    <div class="p-3 rounded border ${alertClass}">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-medium">${event.event_type}</div>
+                                <div class="text-sm opacity-80">IP: ${event.src_ip} → ${event.dst_ip}</div>
+                                <div class="text-sm opacity-80">Confiance: ${(event.confidence * 100).toFixed(1)}%</div>
+                            </div>
+                            <div class="text-xs opacity-70">${alertTime.toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                `;
+                
+                alertsContainer.innerHTML += alertHTML;
+            });
+        }
+        
+        // Charger les IPs bloquées
+        async function loadBlockedIps() {
+            try {
+                const response = await fetch(`${API_URL}/blocked_ips`);
+                if (!response.ok) throw new Error('Erreur lors de la récupération des IPs bloquées');
+                
+                const blockedIps = await response.json();
+                
+                // Mettre à jour le tableau des IPs bloquées
+                const tableBody = document.getElementById('blockedIpsTableBody');
+                tableBody.innerHTML = '';
+                
+                if (Object.keys(blockedIps).length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                Aucune adresse IP bloquée
+                            </td>
+                        </tr>
+                    `;
+                    return blockedIps;
+                }
+                
+                // Convertir l'objet en tableau et trier par date (plus récent en premier)
+                const blockedIpsArray = Object.entries(blockedIps).map(([ip, data]) => ({
+                    ip,
+                    ...data
+                }));
+                
+                blockedIpsArray.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                blockedIpsArray.forEach(({ ip, reason, timestamp }) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-800';
+                    
+                    // Formater la date
+                    const blockDate = new Date(timestamp);
+                    const formattedDate = blockDate.toLocaleString();
+                    
+                    // Ajouter les cellules
+                    tr.innerHTML = `
+                        <td class="px-4 py-2 text-sm font-medium">${ip}</td>
+                        <td class="px-4 py-2 text-sm">${reason}</td>
+                        <td class="px-4 py-2 text-sm">${formattedDate}</td>
+                        <td class="px-4 py-2 text-sm">
+                            <button class="text-primary hover:text-opacity-80 unblock-ip-btn" data-ip="${ip}">
+                                <i class="fas fa-unlock mr-1"></i> Débloquer
+                            </button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(tr);
+                });
+                
+                // Ajouter les gestionnaires d'événements pour les boutons de déblocage
+                document.querySelectorAll('.unblock-ip-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const ip = btn.getAttribute('data-ip');
+                        await unblockIp(ip);
+                    });
+                });
+                
+                return blockedIps;
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('blockedIpsTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-red-500">
+                            Erreur lors du chargement des IPs bloquées
+                        </td>
+                    </tr>
+                `;
+                return {};
+            }
+        }
+        
+        // Bloquer une adresse IP
+        async function blockIp(ip) {
+            try {
+                showModal(
+                    'Confirmation',
+                    `<p>Êtes-vous sûr de vouloir bloquer l'adresse IP <strong>${ip}</strong> ?</p>`,
+                    async () => {
+                        try {
+                            const response = await fetch(`${API_URL}/block_ip/${ip}`, {
+                                method: 'POST'
+                            });
+                            
+                            const result = await response.json();
+                            
+                            if (response.ok) {
+                                showNotification('success', `IP ${ip} bloquée avec succès`);
+                                
+                                // Recharger les IPs bloquées
+                                await loadBlockedIps();
+                            } else {
+                                showNotification('error', `Erreur: ${result.message || 'Échec du blocage'}`);
+                            }
+                        } catch (error) {
+                            console.error('Erreur:', error);
+                            showNotification('error', 'Erreur lors du blocage de l\'IP');
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('error', 'Erreur lors du blocage de l\'IP');
+            }
+        }
+        
+        // Débloquer une adresse IP
+        async function unblockIp(ip) {
+            try {
+                showModal(
+                    'Confirmation',
+                    `<p>Êtes-vous sûr de vouloir débloquer l'adresse IP <strong>${ip}</strong> ?</p>`,
+                    async () => {
+                        try {
+                            const response = await fetch(`${API_URL}/unblock_ip/${ip}`, {
+                                method: 'POST'
+                            });
+                            
+                            const result = await response.json();
+                            
+                            if (response.ok) {
+                                showNotification('success', `IP ${ip} débloquée avec succès`);
+                                
+                                // Recharger les IPs bloquées
+                                await loadBlockedIps();
+                            } else {
+                                showNotification('error', `Erreur: ${result.message || 'Échec du déblocage'}`);
+                            }
+                        } catch (error) {
+                            console.error('Erreur:', error);
+                            showNotification('error', 'Erreur lors du déblocage de l\'IP');
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('error', 'Erreur lors du déblocage de l\'IP');
+            }
+        }
+        
+        // Charger les logs
+        async function loadLogs(logFile = 'ai_firewall', lines = 100) {
+            try {
+                const response = await fetch(`${API_URL}/logs?file=${logFile}&lines=${lines}`);
+                if (!response.ok) throw new Error('Erreur lors de la récupération des logs');
+                
+                const data = await response.json();
+                
+                // Mettre à jour l'affichage des logs
+                const logsContainer = document.getElementById('logsContainer');
+                
+                if (data.logs && data.logs.length > 0) {
+                    logsContainer.textContent = data.logs.join('\n');
+                } else {
+                    logsContainer.textContent = 'Aucun log disponible';
+                }
+                
+                // Faire défiler vers le bas
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+                
+                return data.logs;
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('logsContainer').textContent = 'Erreur lors du chargement des logs';
+                return [];
+            }
+        }
+        
+        // Démarrer le service
+        async function startService() {
+            try {
+                const response = await fetch(`${API_URL}/start`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification('success', 'Service démarré avec succès');
+                    
+                    // Recharger le statut après un court délai
+                    setTimeout(async () => {
+                        await loadServiceStatus();
+                    }, 1000);
+                } else {
+                    showNotification('error', `Erreur: ${result.message || 'Échec du démarrage'}`);
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('error', 'Erreur lors du démarrage du service');
+                return null;
+            }
+        }
+        
+        // Arrêter le service
+        async function stopService() {
+            try {
+                const response = await fetch(`${API_URL}/stop`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification('success', 'Service arrêté avec succès');
+                    
+                    // Recharger le statut après un court délai
+                    setTimeout(async () => {
+                        await loadServiceStatus();
+                    }, 1000);
+                } else {
+                    showNotification('error', `Erreur: ${result.message || 'Échec de l\'arrêt'}`);
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('error', 'Erreur lors de l\'arrêt du service');
+                return null;
+            }
+        }
+        
+        // Détecter les interfaces réseau
+        async function detectInterfaces() {
+            try {
+                const response = await fetch(`${API_URL}/interfaces`);
+                if (!response.ok) throw new Error('Erreur lors de la détection des interfaces');
+                
+                const data = await response.json();
+                
+                // Mettre à jour l'interface avec les interfaces détectées
+                const interfacesContainer = document.getElementById('interfacesContainer');
+                interfacesContainer.innerHTML = '';
+                
+                if (data.interfaces && data.interfaces.length > 0) {
+                    // Charger la configuration actuelle pour savoir quelles interfaces sont sélectionnées
+                    const configResponse = await fetch(`${API_URL}/config`);
+                    const config = await configResponse.json();
+                    const selectedInterfaces = config.interfaces || [];
+                    
+                    data.interfaces.forEach(iface => {
+                        const div = document.createElement('div');
+                        div.className = 'flex items-center';
+                        
+                        const isChecked = selectedInterfaces.includes(iface);
+                        
+                        div.innerHTML = `
+                            <input type="checkbox" id="iface-${iface}" name="interfaces" value="${iface}" class="h-4 w-4 text-primary border-gray-300 rounded" ${isChecked ? 'checked' : ''}>
+                            <label for="iface-${iface}" class="ml-2 block text-sm">${iface}</label>
+                        `;
+                        
+                        interfacesContainer.appendChild(div);
+                    });
+                } else {
+                    interfacesContainer.innerHTML = `
+                        <div class="text-sm text-gray-500 dark:text-gray-400">
+                            Aucune interface détectée
+                        </div>
+                    `;
+                }
+                
+                return data.interfaces;
+            } catch (error) {
+                console.error('Erreur:', error);
+                document.getElementById('interfacesContainer').innerHTML = `
+                    <div class="text-sm text-red-500">
+                        Erreur lors de la détection des interfaces
+                    </div>
+                `;
+                return [];
+            }
+        }
+        
+        // Sauvegarder la configuration
+        async function saveConfig(config) {
+            try {
+                const response = await fetch(`${API_URL}/config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification('success', 'Configuration sauvegardée avec succès');
+                    
+                    // Mettre à jour le statut dans le formulaire
+                    const statusElement = document.getElementById('configStatus');
+                    statusElement.className = 'mt-3 text-center text-green-600 dark:text-green-400';
+                    statusElement.textContent = 'Configuration sauvegardée avec succès';
+                    statusElement.classList.remove('hidden');
+                    
+                    // Cacher le message après 3 secondes
+                    setTimeout(() => {
+                        statusElement.classList.add('hidden');
+                    }, 3000);
+                    
+                    // Recharger la configuration affichée
+                    await loadConfig();
+                } else {
+                    showNotification('error', `Erreur: ${result.message || 'Échec de la sauvegarde'}`);
+                    
+                    // Mettre à jour le statut dans le formulaire
+                    const statusElement = document.getElementById('configStatus');
+                    statusElement.className = 'mt-3 text-center text-red-600 dark:text-red-400';
+                    statusElement.textContent = `Erreur: ${result.message || 'Échec de la sauvegarde'}`;
+                    statusElement.classList.remove('hidden');
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('error', 'Erreur lors de la sauvegarde de la configuration');
+                
+                // Mettre à jour le statut dans le formulaire
+                const statusElement = document.getElementById('configStatus');
+                statusElement.className = 'mt-3 text-center text-red-600 dark:text-red-400';
+                statusElement.textContent = 'Erreur lors de la sauvegarde de la configuration';
+                statusElement.classList.remove('hidden');
+                
+                return null;
+            }
+        }
+        
+        // Fonction de rafraîchissement global
+        async function refreshAll() {
+            try {
+                // Vérifier la connexion à l'API
+                if (!await checkApiConnection()) {
+                    return;
+                }
+                
+                // Charger le statut du service
+                await loadServiceStatus();
+                
+                // Charger la configuration
+                await loadConfig();
+                
+                // Charger les statistiques
+                await loadStats();
+                
+                // Mettre à jour le graphique d'activité
+                await updateActivityChart();
+                
+                // Charger les événements récents
+                await loadEvents();
+                
+                // Charger les IPs bloquées
+                await loadBlockedIps();
+                
+                console.log('Rafraîchissement terminé');
+            } catch (error) {
+                console.error('Erreur lors du rafraîchissement:', error);
+            }
+        }
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialiser les graphiques
+            initCharts();
+            
+            // Vérifier la connexion à l'API
+            if (!await checkApiConnection()) {
+                return;
+            }
+            
+            // Charger les données initiales
+            await refreshAll();
+            
+            // Configurer le rafraîchissement automatique
+            refreshInterval = setInterval(refreshAll, 10000);
+            
+            // Détecter les interfaces réseau pour la configuration
+            await detectInterfaces();
+            
+            // Charger les logs initiaux
+            await loadLogs();
+            
+            // Gestionnaires d'événements
+            
+            // Onglets
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const tabId = this.id.replace('-tab', '');
+                    switchTab(tabId);
+                });
+            });
+            
+            // Bouton de démarrage du service
+            document.getElementById('startBtn').addEventListener('click', async function() {
+                await startService();
+            });
+            
+            // Bouton d'arrêt du service
+            document.getElementById('stopBtn').addEventListener('click', async function() {
+                await stopService();
+            });
+            
+            // Bouton de rafraîchissement
+            document.getElementById('refreshBtn').addEventListener('click', async function() {
+                await refreshAll();
+            });
+            
+            // Bouton d'effacement des alertes
+            document.getElementById('clearAlertsBtn').addEventListener('click', function() {
+                document.getElementById('alertsContainer').innerHTML = `
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-6">
+                        Aucune alerte récente
+                    </div>
+                `;
+            });
+            
+            // Slider du seuil de confiance
+            document.getElementById('configThreshold').addEventListener('input', function() {
+                document.getElementById('thresholdValue').textContent = this.value + '%';
+            });
+            
+            // Bouton de détection des interfaces
+            document.getElementById('detectInterfacesBtn').addEventListener('click', async function() {
+                await detectInterfaces();
+            });
+            
+            // Formulaire de configuration
+            document.getElementById('configForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // Récupérer les valeurs du formulaire
+                const mode = document.getElementById('configMode').value;
+                const confidenceThreshold = parseInt(document.getElementById('configThreshold').value) / 100;
+                const updateInterval = parseInt(document.getElementById('configInterval').value);
+                const enableLogging = document.getElementById('configLogging').checked;
+                const enableNotifications = document.getElementById('configNotifications').checked;
+                
+                // Récupérer les interfaces sélectionnées
+                const interfaces = [];
+                document.querySelectorAll('input[name="interfaces"]:checked').forEach(checkbox => {
+                    interfaces.push(checkbox.value);
+                });
+                
+                // Préparer l'objet de configuration
+                const config = {
+                    mode,
+                    confidence_threshold: confidenceThreshold,
+                    interfaces,
+                    update_interval: updateInterval,
+                    enable_logging: enableLogging,
+                    enable_notifications: enableNotifications
+                };
+                
+                // Sauvegarder la configuration
+                await saveConfig(config);
+            });
+            
+            // Bouton d'application des filtres d'événements
+            document.getElementById('applyFiltersBtn').addEventListener('click', async function() {
+                const eventType = document.getElementById('eventTypeFilter').value;
+                const fromDate = document.getElementById('eventFromFilter').value ? new Date(document.getElementById('eventFromFilter').value).toISOString() : null;
+                const limit = parseInt(document.getElementById('eventLimitFilter').value);
+                
+                await loadEvents(limit, eventType, fromDate);
+            });
+            
+            // Bouton de rafraîchissement des logs
+            document.getElementById('refreshLogsBtn').addEventListener('click', async function() {
+                const logFile = document.getElementById('logFileSelect').value;
+                await loadLogs(logFile);
+            });
+            
+            // Sélecteur de fichier de log
+            document.getElementById('logFileSelect').addEventListener('change', async function() {
+                const logFile = this.value;
+                await loadLogs(logFile);
+            });
+            
+            // Fermeture du modal avec Escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    document.getElementById('modal').classList.add('hidden');
+                }
+            });
+            
+            // Clic en dehors du modal pour fermer
+            document.getElementById('modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.add('hidden');
+                }
+            });
+            
+            console.log('Initialisation terminée');
+        });
+        
+        // Nettoyage avant déchargement de la page
+        window.addEventListener('beforeunload', function() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
